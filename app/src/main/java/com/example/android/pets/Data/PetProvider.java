@@ -100,6 +100,7 @@ public class PetProvider extends ContentProvider {
             default:
                 throw new IllegalArgumentException("Cannot query unknown URI " + uri);
         }
+        cursor.setNotificationUri(getContext().getContentResolver(), uri);
         return cursor;
     }
 
@@ -152,6 +153,8 @@ public class PetProvider extends ContentProvider {
             Log.e(LOG_TAG, "Failed to insert row for " + uri);
             return null;
         }
+
+        getContext().getContentResolver().notifyChange(uri, null);
 
         // Returna o novo URI com o ID (do registro recém inserido) anexado ao fim
         return ContentUris.withAppendedId(uri, id);
@@ -220,8 +223,17 @@ public class PetProvider extends ContentProvider {
         // Caso contrário, obtém o banco de dados com permissão de escrita e para atualizar os dados
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
-        // Retorna o número de registros do banco de dados afetados pelo comando update
-        return database.update(PetEntry.TABLE_NAME, values, selection, selectionArgs);
+        // Perform the update on the database and get the number of rows affected
+        int rowsUpdated = database.update(PetEntry.TABLE_NAME, values, selection, selectionArgs);
+
+        // If 1 or more rows were updated, then notify all listeners that the data at the
+        // given URI has changed
+        if (rowsUpdated != 0) {
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+
+        // Return the number of rows updated
+        return rowsUpdated;
     }
 
     /**
@@ -232,19 +244,32 @@ public class PetProvider extends ContentProvider {
         // Obtém banco de dados com permissão de escrita
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
+        // Track the number of rows that were deleted
+        int rowsDeleted;
+
         final int match = sUriMatcher.match( uri );
         switch (match) {
             case PETS:
                 // Deleta todos os registros que correspondem ao selection e selection args
-                return database.delete( PetEntry.TABLE_NAME, selection, selectionArgs );
+                rowsDeleted = database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
+                break;
             case PET_ID:
                 // Deleta um único registro dado pelo ID na URI
                 selection = PetEntry._ID + "=?";
                 selectionArgs = new String[]{String.valueOf( ContentUris.parseId( uri ) )};
-                return database.delete( PetEntry.TABLE_NAME, selection, selectionArgs );
+                rowsDeleted = database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
+                break;
             default:
                 throw new IllegalArgumentException( "Deletion is not supported for " + uri );
         }
+        // If 1 or more rows were deleted, then notify all listeners that the data at the
+        // given URI has changed
+        if (rowsDeleted != 0) {
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+
+        // Return the number of rows deleted
+        return rowsDeleted;
     }
 
     /**
