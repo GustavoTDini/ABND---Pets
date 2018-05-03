@@ -18,17 +18,15 @@ package com.example.android.pets;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import com.example.android.pets.Data.PetDbHelper;
 import com.example.android.pets.Data.PetContract.PetEntry;
 
 /**
@@ -38,9 +36,6 @@ public class CatalogActivity extends AppCompatActivity {
 
     private final static String SEPARATOR = " - ";
 
-    // To access our database, we instantiate our subclass of SQLiteOpenHelper
-    // and pass the context, which is the current activity.
-    public PetDbHelper mDbHelper;
 
     @Override
     protected void onStart() {
@@ -52,7 +47,6 @@ public class CatalogActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_catalog);
-        mDbHelper = new PetDbHelper(this);
 
         // Setup FAB to open EditorActivity
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
@@ -133,21 +127,23 @@ public class CatalogActivity extends AppCompatActivity {
         }
     }
 
-    public void insertPet(){
-
-        // Create and/or open a database to read from it
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-
+    /**
+     * Método auxiliar para inserir dados de pet hardcoded no banco de dados. Para propósitos de debugação apenas.
+     */
+    private void insertPet() {
+        // Cria um objeto ContentValues onde nomes de coluna são as chaves,
+        // e atributos do pet Toto são os valores.
         ContentValues values = new ContentValues();
         values.put(PetEntry.COLUMN_PET_NAME, "Toto");
         values.put(PetEntry.COLUMN_PET_BREED, "Terrier");
-        values.put(PetEntry.COLUMN_PET_GENDER, PetEntry.GENDER_MALE );
+        values.put(PetEntry.COLUMN_PET_GENDER, PetEntry.GENDER_MALE);
         values.put(PetEntry.COLUMN_PET_WEIGHT, 7);
 
-        // Insert the new row, returning the primary key value of the new row
-        long newRowID = db.insert(PetEntry.TABLE_NAME, null, values);
-
-        Log.v( "CatalogActivity", "New Row Id = " + newRowID );
+        // Insere um novo registro para Toto no provider usando o ContentResolver.
+        // Use o {@link PetEntry#CONTENT_URI} para indicar que queremos inserir
+        // no tabela de banco de dados de pets.
+        // Recebe o novo URI de conteúdo que irá nos habilitar acessar dados do Toto no futuro.
+        Uri newUri = getContentResolver().insert(PetEntry.CONTENT_URI, values);
     }
 
     @Override
