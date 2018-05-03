@@ -17,6 +17,7 @@ package com.example.android.pets;
 
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
@@ -98,7 +99,7 @@ public class EditorActivity extends AppCompatActivity {
                     } else if (selection.equals(getString(R.string.gender_female))) {
                         mGender = PetEntry.GENDER_FEMALE; // Female
                     } else {
-                        mGender = PetEntry.GENDER_UNKNOW; // Unknown
+                        mGender = PetEntry.GENDER_UNKNOWN; // Unknown
                     }
                 }
             }
@@ -141,34 +142,37 @@ public class EditorActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    private void insertPet(){
-
-        PetDbHelper mDbHelper = new PetDbHelper( this );
-        // Create and/or open a database to read from it
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
-
+    /**
+     * Obtém entrada do usuário do editor e salva o novo pet no banco de dados.
+     */
+    private void insertPet() {
+        // Lê dos campos de entrada
+        // Use trim para eliminar espaços em branco à direita e à esquerda
         String nameString = mNameEditText.getText().toString().trim();
         String breedString = mBreedEditText.getText().toString().trim();
-        int weightInt = Integer.parseInt( mWeightEditText.getText().toString().trim());
+        String weightString = mWeightEditText.getText().toString().trim();
+        int weight = Integer.parseInt(weightString);
 
+        // Cria um objeto ContentValues onde nomes de coluna são as chaves,
+        // e atributos de pet do editor são os valores.
         ContentValues values = new ContentValues();
         values.put(PetEntry.COLUMN_PET_NAME, nameString);
         values.put(PetEntry.COLUMN_PET_BREED, breedString);
-        values.put(PetEntry.COLUMN_PET_GENDER, mGender );
-        values.put(PetEntry.COLUMN_PET_WEIGHT, weightInt);
+        values.put(PetEntry.COLUMN_PET_GENDER, mGender);
+        values.put(PetEntry.COLUMN_PET_WEIGHT, weight);
 
-        // Insert the new row, returning the primary key value of the new row
-        long newRowID = db.insert(PetEntry.TABLE_NAME, null, values);
+        // Insere um novo pet no provider, returnando o URI de conteúdo para o novo pet.
+        Uri newUri = getContentResolver().insert(PetEntry.CONTENT_URI, values);
 
-        if (newRowID != -1 ){
-            Toast sucessToast = Toast.makeText( this, "Pet saved with Id: " + newRowID, Toast.LENGTH_LONG );
-            sucessToast.show();
-        } else{
-            Toast failToast = Toast.makeText( this, "Error with aving Pet!", Toast.LENGTH_LONG );
-            failToast.show();
+        // Mostra um mensagem toast dependendo ou não se a inserção foi bem sucedida
+        if (newUri == null) {
+            // Se o novo conteúdo do URI é nulo, então houve um erro com inserção.
+            Toast.makeText(this, getString(R.string.editor_insert_pet_failed),
+                    Toast.LENGTH_SHORT).show();
+        } else {
+            // Caso contrário, a inserção foi bem sucedida e podemos mostrar um toast.
+            Toast.makeText(this, getString(R.string.editor_insert_pet_successful),
+                    Toast.LENGTH_SHORT).show();
         }
-
-        Log.v( "CatalogActivity", "New Row Id = " + newRowID );
-
     }
 }

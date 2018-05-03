@@ -64,4 +64,11 @@
 
     <!-- Texto de legenda para a view vazia, que solicita que o usuário adicione um pet [CHAR LIMIT=50] -->
     <string name="empty_view_subtitle_text">Get started by adding a pet</string>
+
+    <!-- Mensagem Toast no editor quando um novo pet foi inserido com sucesso [CHAR LIMIT=NONE] -->
+    <string name="editor_insert_pet_successful">Pet saved</string>
+
+    <!-- Mensagem Toast no editor quando um novo pet falhou em ser inserido [CHAR LIMIT=NONE] -->
+    <string name="editor_insert_pet_failed">Error with saving pet</string>
+
 </resources>
