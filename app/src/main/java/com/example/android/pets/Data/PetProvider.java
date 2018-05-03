@@ -16,6 +16,9 @@ import com.example.android.pets.Data.PetContract.PetEntry;
  */
 public class PetProvider extends ContentProvider {
 
+    /** Tag for the log messages */
+    public static final String LOG_TAG = PetProvider.class.getSimpleName();
+
     /** URI matcher code for the content URI for the pets table */
     private static final int PETS = 100;
 
@@ -35,32 +38,30 @@ public class PetProvider extends ContentProvider {
         // should recognize. All paths added to the UriMatcher have a corresponding code to return
         // when a match is found.
 
-        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS, PETS  );
-        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS + "#", PET_ID  );
+        // The content URI of the form "content://com.example.android.pets/pets" will map to the
+        // integer code {@link #PETS}. This URI is used to provide access to MULTIPLE rows
+        // of the pets table.
+        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS, PETS);
+
+        // The content URI of the form "content://com.example.android.pets/pets/#" will map to the
+        // integer code {@link #PET_ID}. This URI is used to provide access to ONE single row
+        // of the pets table.
+        //
+        // In this case, the "#" wildcard is used where "#" can be substituted for an integer.
+        // For example, "content://com.example.android.pets/pets/3" matches, but
+        // "content://com.example.android.pets/pets" (without a number at the end) doesn't match.
+        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS + "/#", PET_ID);
     }
 
-    /**
-     * Tag for the log messages
-     */
-    public static final String LOG_TAG = PetProvider.class.getSimpleName();
-
-    /**
-     * Database Helper Object
-     */
+    /** Database helper object */
     private PetDbHelper mDbHelper;
 
-    /**
-     * Initialize the provider and the database helper object.
-     */
     @Override
     public boolean onCreate() {
         mDbHelper = new PetDbHelper(getContext());
         return true;
     }
 
-    /**
-     * Perform the query for the given URI. Use the given projection, selection, selection arguments, and sort order.
-     */
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
@@ -68,7 +69,7 @@ public class PetProvider extends ContentProvider {
         SQLiteDatabase database = mDbHelper.getReadableDatabase();
 
         // This cursor will hold the result of the query
-        Cursor cursor = null;
+        Cursor cursor;
 
         // Figure out if the URI matcher can match the URI to a specific code
         int match = sUriMatcher.match(uri);
@@ -90,7 +91,7 @@ public class PetProvider extends ContentProvider {
                 // arguments that will fill in the "?". Since we have 1 question mark in the
                 // selection, we have 1 String in the selection arguments' String array.
                 selection = PetEntry._ID + "=?";
-                selectionArgs = new String[] { String.valueOf( ContentUris.parseId(uri)) };
+                selectionArgs = new String[] { String.valueOf(ContentUris.parseId(uri)) };
 
                 // This will perform a query on the pets table where the _id equals 3 to return a
                 // Cursor containing that row of the table.
@@ -100,13 +101,16 @@ public class PetProvider extends ContentProvider {
             default:
                 throw new IllegalArgumentException("Cannot query unknown URI " + uri);
         }
+
+        // Set notification URI on the Cursor,
+        // so we know what content URI the Cursor was created for.
+        // If the data at this URI changes, then we know we need to update the Cursor.
         cursor.setNotificationUri(getContext().getContentResolver(), uri);
+
+        // Return the cursor
         return cursor;
     }
 
-    /**
-     * Insert new data into the provider with the given ContentValues.
-     */
     @Override
     public Uri insert(Uri uri, ContentValues contentValues) {
         final int match = sUriMatcher.match(uri);
@@ -123,40 +127,41 @@ public class PetProvider extends ContentProvider {
      * for that specific row in the database.
      */
     private Uri insertPet(Uri uri, ContentValues values) {
-        // Checa se o nome não é nulo
+        // Check that the name is not null
         String name = values.getAsString(PetEntry.COLUMN_PET_NAME);
         if (name == null) {
             throw new IllegalArgumentException("Pet requires a name");
         }
 
-        // Checa se o gênero não é válido
+        // Check that the gender is valid
         Integer gender = values.getAsInteger(PetEntry.COLUMN_PET_GENDER);
         if (gender == null || !PetEntry.isValidGender(gender)) {
             throw new IllegalArgumentException("Pet requires valid gender");
         }
 
-        // Se o peso é fornecido, checa se é maior ou igual a 0 kg
+        // If the weight is provided, check that it's greater than or equal to 0 kg
         Integer weight = values.getAsInteger(PetEntry.COLUMN_PET_WEIGHT);
         if (weight != null && weight < 0) {
             throw new IllegalArgumentException("Pet requires valid weight");
         }
 
-        // Não é necessário checar a raça, qualquer valor é válido (incluindo nulo).
+        // No need to check the breed, any value is valid (including null).
 
-        // Obtém banco de dados com permissão de escrita
+        // Get writeable database
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
-        // Insere o novo pet com os dados valores
+        // Insert the new pet with the given values
         long id = database.insert(PetEntry.TABLE_NAME, null, values);
-        // Se o ID é -1, então a inserção falhou. Imprime um Log de erro e retorna nulo.
+        // If the ID is -1, then the insertion failed. Log an error and return null.
         if (id == -1) {
             Log.e(LOG_TAG, "Failed to insert row for " + uri);
             return null;
         }
 
+        // Notify all listeners that the data has changed for the pet content URI
         getContext().getContentResolver().notifyChange(uri, null);
 
-        // Returna o novo URI com o ID (do registro recém inserido) anexado ao fim
+        // Return the new URI with the ID (of the newly inserted row) appended at the end
         return ContentUris.withAppendedId(uri, id);
     }
 
@@ -168,9 +173,9 @@ public class PetProvider extends ContentProvider {
             case PETS:
                 return updatePet(uri, contentValues, selection, selectionArgs);
             case PET_ID:
-                // Para o código PET_ID, extraia o ID do URI,
-                // para sabermos qual registro atualizar. Selection será "_id=?" e selection
-                // args será um String array contendo o ID atual.
+                // For the PET_ID code, extract out the ID from the URI,
+                // so we know which row to update. Selection will be "_id=?" and selection
+                // arguments will be a String array containing the actual ID.
                 selection = PetEntry._ID + "=?";
                 selectionArgs = new String[] { String.valueOf(ContentUris.parseId(uri)) };
                 return updatePet(uri, contentValues, selection, selectionArgs);
@@ -180,13 +185,13 @@ public class PetProvider extends ContentProvider {
     }
 
     /**
-     * Atualiza pets no banco de dados com o content values dado. Aplica as mudanças para os registros
-     * especificados nos argumentos selection e selection args (que podem ser 0 ou 1 ou mais pets).
-     * Retorna o número de registros que foram atualizados corretamente.
+     * Update pets in the database with the given content values. Apply the changes to the rows
+     * specified in the selection and selection arguments (which could be 0 or 1 or more pets).
+     * Return the number of rows that were successfully updated.
      */
     private int updatePet(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        // Se a chave {@link PetEntry#COLUMN_PET_NAME} está presente,
-        // checa se o valor do nome não é nulo.
+        // If the {@link PetEntry#COLUMN_PET_NAME} key is present,
+        // check that the name value is not null.
         if (values.containsKey(PetEntry.COLUMN_PET_NAME)) {
             String name = values.getAsString(PetEntry.COLUMN_PET_NAME);
             if (name == null) {
@@ -194,8 +199,8 @@ public class PetProvider extends ContentProvider {
             }
         }
 
-        // Se a chave {@link PetEntry#COLUMN_PET_GENDER} está presente,
-        // checa se o valor do gênero é válido.
+        // If the {@link PetEntry#COLUMN_PET_GENDER} key is present,
+        // check that the gender value is valid.
         if (values.containsKey(PetEntry.COLUMN_PET_GENDER)) {
             Integer gender = values.getAsInteger(PetEntry.COLUMN_PET_GENDER);
             if (gender == null || !PetEntry.isValidGender(gender)) {
@@ -203,24 +208,24 @@ public class PetProvider extends ContentProvider {
             }
         }
 
-        // Se a chave {@link PetEntry#COLUMN_PET_WEIGHT} está presente,
-        // checa se o valor do peso é válido.
+        // If the {@link PetEntry#COLUMN_PET_WEIGHT} key is present,
+        // check that the weight value is valid.
         if (values.containsKey(PetEntry.COLUMN_PET_WEIGHT)) {
-            // Checa se o peso é maior ou igual a 0 kg
+            // Check that the weight is greater than or equal to 0 kg
             Integer weight = values.getAsInteger(PetEntry.COLUMN_PET_WEIGHT);
             if (weight != null && weight < 0) {
                 throw new IllegalArgumentException("Pet requires valid weight");
             }
         }
 
-        // Não precisa checar a raça, qualquer valor é válido (incluindo nulo).
+        // No need to check the breed, any value is valid (including null).
 
-        // Se não há valores parar atualizar, então não tenta atualizar o banco de dados
+        // If there are no values to update, then don't try to update the database
         if (values.size() == 0) {
             return 0;
         }
 
-        // Caso contrário, obtém o banco de dados com permissão de escrita e para atualizar os dados
+        // Otherwise, get writeable database to update the data
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
         // Perform the update on the database and get the number of rows affected
@@ -236,32 +241,30 @@ public class PetProvider extends ContentProvider {
         return rowsUpdated;
     }
 
-    /**
-     * Delete the data at the given selection and selection arguments.
-     */
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        // Obtém banco de dados com permissão de escrita
+        // Get writeable database
         SQLiteDatabase database = mDbHelper.getWritableDatabase();
 
         // Track the number of rows that were deleted
         int rowsDeleted;
 
-        final int match = sUriMatcher.match( uri );
+        final int match = sUriMatcher.match(uri);
         switch (match) {
             case PETS:
-                // Deleta todos os registros que correspondem ao selection e selection args
+                // Delete all rows that match the selection and selection args
                 rowsDeleted = database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
                 break;
             case PET_ID:
-                // Deleta um único registro dado pelo ID na URI
+                // Delete a single row given by the ID in the URI
                 selection = PetEntry._ID + "=?";
-                selectionArgs = new String[]{String.valueOf( ContentUris.parseId( uri ) )};
+                selectionArgs = new String[] { String.valueOf(ContentUris.parseId(uri)) };
                 rowsDeleted = database.delete(PetEntry.TABLE_NAME, selection, selectionArgs);
                 break;
             default:
-                throw new IllegalArgumentException( "Deletion is not supported for " + uri );
+                throw new IllegalArgumentException("Deletion is not supported for " + uri);
         }
+
         // If 1 or more rows were deleted, then notify all listeners that the data at the
         // given URI has changed
         if (rowsDeleted != 0) {
@@ -272,9 +275,6 @@ public class PetProvider extends ContentProvider {
         return rowsDeleted;
     }
 
-    /**
-     * Returns the MIME type of data for the content URI.
-     */
     @Override
     public String getType(Uri uri) {
         final int match = sUriMatcher.match(uri);
